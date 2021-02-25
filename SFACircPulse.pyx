@@ -73,6 +73,7 @@ cdef class SFACircularPulse:
     #memeber variables like in C++!
     cdef readonly double Ip, Up, rt2Up, omega
     cdef readonly int N
+    #cdef object __weakref__ # enable weak referencing support
     
     def __init__(self, Ip_ = 0.5, Up_ = 0.44, omega_ = 0.057, N_ = 6, phi_ = 0.):
         '''
@@ -80,7 +81,7 @@ cdef class SFACircularPulse:
         '''
         self.Ip = Ip_
         self.Up = Up_
-        self.rt2Up = np.sqrt(2*Up_) #must change this if Up is changed!
+        self.rt2Up = np.sqrt(2*Up_) #must change this if Up is changed! Fixed by making Up readonly
         self.omega = omega_
         
         #Pulse parameters
@@ -88,7 +89,6 @@ cdef class SFACircularPulse:
         
         #Pulse parameters for speed
         #Fill in if they crop up
-
         
     #@functools.lru_cache(maxsize=cacheSize)
     cdef dbl_or_cmplx F(s, dbl_or_cmplx t):
