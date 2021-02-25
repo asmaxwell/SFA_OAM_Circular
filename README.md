@@ -1,5 +1,5 @@
 # SFA OAM Circular
-Using the SFA to compute the orbital angular momentum of a photoelectron ionized via a strong circular sin^2 pulse laser field.
+Using the SFA to compute the orbital angular momentum of a photoelectron ionized via a strong circular sin^2 pulse laser field. Based on the results of this [preprint arXiv paper](https://arxiv.org/abs/2102.07453)
 
 To build on linux use the build.sh script, run:
 `./build.sh` in the directory
