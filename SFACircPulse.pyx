@@ -353,6 +353,7 @@ cdef class SFACircularPulse:
         cdef double rtTwo = sqrt_re(2.0)
         cdef double V0 = s.Ip + 2./rtTwo
         cdef double fac = -sqrt_re(Pi)/sqrt_re(rtTwo)
+        #here we use the fact that px*px + py*py = -2*s.Ip
         cdef double complex exps=exp(s.Ip/rtTwo)
         return Efxt * Efyt * fac * px*py * exps
     
