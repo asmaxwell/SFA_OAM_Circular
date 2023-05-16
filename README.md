@@ -27,21 +27,21 @@ The only accessible member functions from outside the class are those with cpdef
 - TimesGen(p, theta, phi) find all times of ionization via the saddle point approximation for a specific momentum coordinate
 - M(p, theta, phi, tf) Transition amplitude for a final momentum point computed using the saddle point approximaton
 - Ml(p, theta, Nphi) output vector of size Nphi of OAM dependent transition amplitude using FFT of M(p, theta, phi, tf)
-
-**To be implemented:**
-
-- d0(p, theta, phi, t) function for the matrix element incorporating the effect of the bound state
+- d0(p, theta, phi, t) function for the matrix element incorporating the effect of the bound state, currently implemented for hydrogen ground state and Gaussian trap potential ground state
 
 ### Class member variables
 There are the following member variables relevant to the input parameters of the problem and as ways to control the class.
 
 The following are class member that are set when you make an instance and remain fixed after that point (readonly)
 
-- Ip: the ionization potential
-- Up: Poneromotive energy
-- omega: carrier frequency
-- N: number of lasser cycles
-- phi: carrier envelope phase (currently obsolete as it is not implemented)
+- Ip: ``double`` the ionization potential
+- Up: ``double`` Ponderomotive energy
+- omega: ``double`` carrier frequency
+- N: ``int``number of lasser cycles
+- phi: ``double`` carrier envelope phase (currently obsolete as it is not implemented)
+- anticlockwise: ``bool`` that determining the rotation of the field
+- T: ``double`` delay inputting in cycles for pulse that can be used to create inteference vortices by combining the transition amplitudes of two pulses. Note that this only works for non-overlapping pulses. I.e. T (pulse two) > N (pulse one)
+- Target: ``int`` defines target for d0, currenty implmented for Target=0 hydrogen and Target=1
 
 
 Other member varibles include
