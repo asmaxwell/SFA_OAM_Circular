@@ -63,6 +63,21 @@ cdef double Pi = np.pi
 cdef double rtPi = np.sqrt(Pi)
 cdef int cacheSize = 2**20
 
+### shorcut functions to efficntly switch trig between real and complex varients    
+cdef sin_c(dbl_or_cmplx t):
+        if(dbl_or_cmplx is double):
+            return sin_re(t)
+        else:
+            return sin(t)
+cdef cos_c(dbl_or_cmplx t):
+        if(dbl_or_cmplx is double):
+            return cos_re(t)
+        else:
+            return cos(t)
+        
+cdef cot_c(dbl_or_cmplx t):
+        return cos_c(t)/sin_c(t)
+
 
 
 
@@ -71,25 +86,34 @@ cdef class SFACircularPulse:
         Class to compute the transition amplitude M(p) and its dervative M_g(p) using the SFA and saddle point approximation
     '''
     #memeber variables like in C++!
-    cdef readonly double Ip, Up, rt2Up, omega
-    cdef readonly int N
+    cdef readonly double Ip, Up, rt2Up, omega, T, sgn
+    cdef readonly int N, Target
+    cdef readonly bool anticlockwise
     #cdef object __weakref__ # enable weak referencing support
     
-    def __init__(self, Ip_ = 0.5, Up_ = 0.44, omega_ = 0.057, N_ = 6, phi_ = 0.):
+    def __init__(self, Ip_ = 0.5, Up_ = 0.44, omega_ = 0.057, N_ = 6
+                 , phi_ = 0., anticlockwise_=True, TCycles_ = 0, Target_ = 0):
         '''
             Initialise field and target parameters defaults correspond to 800nm wl and 2 10^14 W/cm^2 intensity
         '''
+        #Target parameters
         self.Ip = Ip_
+        self.Target = Target_
+        
+        #Pulse parameters
         self.Up = Up_
         self.rt2Up = np.sqrt(2*Up_) #must change this if Up is changed! Fixed by making Up readonly
         self.omega = omega_
-        
-        #Pulse parameters
         self.N = N_
+        self.anticlockwise = anticlockwise_ #direction of field rotation
+        cdef double Cycles = 2*Pi /self.omega
+        self.T = Cycles * TCycles_ #delay parameter, input (TCycles) in number of cycle of delay
         
         #Pulse parameters for speed
         #Fill in if they crop up
-        
+        self.sgn = 1.0 if self.anticlockwise else -1.0
+        #print("anticlockwise = ",self.anticlockwise," sgn = ", self.sgn)
+
     #@functools.lru_cache(maxsize=cacheSize)
     cdef dbl_or_cmplx F(s, dbl_or_cmplx t):
         '''
@@ -98,10 +122,7 @@ cdef class SFACircularPulse:
         #need to be fast can get evalutated millions of times
         if(real(t)<0 or real(t)>2*s.N*Pi/s.omega):
             return 0
-        if(dbl_or_cmplx is double):
-            Fval = -s.rt2Up * sin_re(s.omega * t / (2*s.N))**2
-        else:
-            Fval = -s.rt2Up * sin(s.omega * t / (2*s.N) )**2
+        Fval = -s.rt2Up * sin_c(s.omega * t / (2*s.N))**2
         return Fval
     
     #@functools.lru_cache(maxsize=cacheSize)
@@ -129,9 +150,9 @@ cdef class SFACircularPulse:
         cdef dbl_or_cmplx envelope, carrier
         envelope = s.F(t)
         if(dbl_or_cmplx is double):
-            carrier = sin_re(s.omega*t)
+            carrier = s.sgn * sin_re(s.omega*t)
         else:
-            carrier = sin(s.omega*t)
+            carrier = s.sgn * sin(s.omega*t)
         return  envelope * carrier
     
     #@functools.lru_cache(maxsize=cacheSize)
@@ -169,7 +190,7 @@ cdef class SFACircularPulse:
             a1 = sin(s.omega*t)*cos(s.omega*t/(2*s.N))
             a2 = cos(s.omega*t)*sin(s.omega*t/(2*s.N))
         
-        return fac*(a1+s.N*a2)
+        return s.sgn * fac*(a1+s.N*a2)
 
     
     
@@ -180,7 +201,7 @@ cdef class SFACircularPulse:
         '''
         cdef double factor
         if(s.N==1):
-            return -(np.sqrt(s.Up)*(2*t*s.omega - 4*np.sin(t*s.omega) + np.sin(2*t*s.omega)))/(4.*np.sqrt(2)*s.omega)
+            return -(sqrt(s.Up)*(2*t*s.omega - 4*sin_c(t*s.omega) + sin_c(2*t*s.omega)))/(4.*sqrt(2)*s.omega)
         else:
             factor = -s.rt2Up/(2*s.omega*(1-s.N*s.N))
             if(dbl_or_cmplx is double):
@@ -199,17 +220,17 @@ cdef class SFACircularPulse:
         '''
         cdef double factor
         if(s.N==1):
-            return (np.sqrt(2)*np.sqrt(s.Up)*np.sin((t*s.omega)/2.)**4)/s.omega
+            return  s.sgn *(sqrt(2)*sqrt(s.Up)*sin_c((t*s.omega)/2.)**4)/s.omega
         else:
             factor = -s.rt2Up/(2*s.omega*(1-s.N*s.N))
             if(dbl_or_cmplx is double):
                 simpleTrig = s.N*sin_re(s.omega*t)*sin_re(s.omega*t/s.N)
                 longTrig = (1 - s.N*s.N + s.N*s.N*cos_re(s.omega*t/s.N))*cos_re(s.omega*t)
             else:
-                simpleTrig = s.N*sin(s.omega*t)*sin(s.omega*t/s.N)
+                simpleTrig =s.N*sin(s.omega*t)*sin(s.omega*t/s.N)
                 longTrig = (1 - s.N*s.N + s.N*s.N*cos(s.omega*t/s.N))*cos(s.omega*t)
 
-            return factor * (longTrig + simpleTrig - 1)
+            return  s.sgn * factor * (longTrig + simpleTrig - 1)
 
     
 
@@ -235,7 +256,8 @@ cdef class SFACircularPulse:
         cdef dbl_or_cmplx tTerms = (s.Ip + 0.5 * p*p )*t #- Pi*s.N*p*p/s.omega
         cdef dbl_or_cmplx linAI = -p*sin_re(theta)*(cos_re(phi) * s.AfxI(t) + sin_re(phi) * s.AfyI(t))
         cdef dbl_or_cmplx quadAI = -0.5*s.Af2I(t)
-        return tTerms + linAI + quadAI
+        cdef double delayTerm = (s.Ip + 0.5 * p*p )*s.T 
+        return tTerms + linAI + quadAI + delayTerm
     
     
     cpdef dbl_or_cmplx DS(s, double p, double theta, double phi, dbl_or_cmplx t):
@@ -250,7 +272,7 @@ cdef class SFACircularPulse:
             It is clear there will be N+1 solutions and their complex 
             conjugates.
         '''
-        cdef double complex exp_phi = exp(-I*phi)
+        cdef double complex exp_phi = exp(-I*phi*s.sgn)
         cdef double CZ0 = p*s.rt2Up*sin_re(theta)/8
         cdef double CZNm1 = s.Up/16, CZN1 = s.Ip + 0.5*p*p + (3./8.)*s.Up
         
@@ -300,16 +322,39 @@ cdef class SFACircularPulse:
     cpdef dbl_or_cmplx DDS(s, double p, double theta, double phi, dbl_or_cmplx t):
         cdef double px = p*sin_re(theta)*cos_re(phi), py = p*sin_re(theta)*sin_re(phi)
         return -s.Efx(t)*(px+s.Afx(t)) - s.Efy(t)*(py+s.Afy(t))
-        
-
     
-# prefactor keep for future implementation    
-#     #@functools.lru_cache(maxsize=cacheSize)
-# #     cdef double d0(s, double pz, double px, double complex t):
-# #         '''
-# #             Bound state prefactor <p+A(t)|V|0>, ground state and V taken from zero range potential 'atom'
-# #         '''
-# #         return s.d0
+#prefactor
+    #@functools.lru_cache(maxsize=cacheSize)
+    cdef double complex d0(s, double p, double theta, double phi, double complex ts):
+        '''
+            Bound state prefactor <p+A(t)|HI(t)|0>, ground state defined by s.Target
+        '''
+        cdef double complex Efxt = s.Efx(ts)
+        cdef double complex Efyt = s.Efy(ts)
+        cdef double complex Afxt = s.Afx(ts)
+        cdef double complex Afyt = s.Afy(ts)
+        cdef double complex px = p*cos_re(theta) + Afxt
+        cdef double complex py = p*sin_re(theta) + Afyt
+        cdef double complex out = 1.
+        if(s.Target==1):
+            out = s.GaussianPot(px, py, Efxt, Efyt)
+        else:
+            out = 3.0*Pi*sqrt(I/s.DDS(p, theta, phi, ts))/pow_re(2.0, 3.5) 
+                        
+        return out
+    
+    cdef double complex GaussianPot(s, double complex px, double complex py, double complex Efxt, double complex Efyt):
+        '''
+            Prefactor for attoscience simulator project, using a Gaussian potential
+            V0 and alpha are defined so that the ground state has and energy of -Ip
+            The potential is given by V0*exp(-px*px/(alpha*alpha)) +V0*exp(-py*py/(alpha*alpha))
+        '''       
+        
+        cdef double V0 = s.Ip + 2./sqrt_re(2.)
+        cdef double alpha = sqrt_re(V0)
+        cdef double fac = -2.0*Pi*pow_re(V0/alpha, 2.5)
+        cdef double complex exps=exp(V0*s.Ip/alpha)
+        return exps#Efxt * Efyt * fac * px*py * exps
     
 
     
@@ -329,7 +374,8 @@ cdef class SFACircularPulse:
             if(real(ts)<tf):
                 det = sqrt(2*Pi*I/s.DDS(p, theta, phi, ts))
                 expS = exp(I*s.S(p, theta, phi, ts))
-                MSum += det*expS
+                d0 = s.d0(p, theta, phi, ts)
+                MSum += d0*det*expS
         return MSum
     #transition amplitude in cartesian co-ordinates
     cpdef double complex Mxy(s, px, py, pz, tf = np.inf):
